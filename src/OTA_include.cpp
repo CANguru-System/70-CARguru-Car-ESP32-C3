@@ -95,5 +95,8 @@ void Connect2WiFiandOTA()
   ElegantOTA.begin(&server);
   // Start server
   server.begin();
-  //   server.handleClient();
+  while (true)
+  {
+   server.handleClient();
+  } 
 }
