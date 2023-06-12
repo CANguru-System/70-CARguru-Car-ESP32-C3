@@ -1,2 +1,2 @@
-# 70-CARguru-Car-ESP32-C3
-Software for the CARguru-Board with the Seeed XIAO ESP32-C3 Soc
+# 63-CARguru-Car-TinyPico
+ Software for the CARguru-Car on TinyPICO
