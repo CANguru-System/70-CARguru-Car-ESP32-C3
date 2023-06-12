@@ -1,11 +1,12 @@
 #include <WiFi.h>
 #include <ESPmDNS.h>
 #include <WiFiUdp.h>
+#include <WebServer.h>
 #include "EEPROM.h"
 #include <OTA_include.h>
 #include "ticker.h"
 
-#include <AsyncElegantOTA.h>
+#include <ElegantOTA.h>
 
 // EEPROM-Adressen
 const uint16_t EEPROM_SIZE = 0xFF;
@@ -59,7 +60,7 @@ void timerOTA()
 ////////////////////////////////////////////////////////////////
 
 // Create AsyncWebServer object on port 80
-AsyncWebServer server(80);
+WebServer server(80);
 
 void Connect2WiFiandOTA()
 {
@@ -87,11 +88,12 @@ void Connect2WiFiandOTA()
   Serial.println(WiFi.localIP());
 
   // Route for root / web page
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
-            { request->send(200, "text/plain", "\r\n\rBitte geben Sie ein:\r\n\r'IP-adresse des Decoders'/update"); });
+  server.on("/", []()
+            { server.send(200, "text/plain", "\r\n\rBitte geben Sie ein:\r\n\r'IP-adresse des Decoders'/update"); });
 
   // Start ElegantOTA
-  AsyncElegantOTA.begin(&server);
+  ElegantOTA.begin(&server);
   // Start server
   server.begin();
+  //   server.handleClient();
 }
