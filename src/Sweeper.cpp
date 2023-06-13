@@ -17,14 +17,12 @@
 // MOTOR ////////////////////////////////////////////////////////////
 void start_speed()
 {
-  ledcAttachPin(pin_motor, channel_motor);
-  ledcSetup(channel_motor, freq_motor, resolution);
-  ledcWrite(channel_motor, no_speed);
+  analogWrite(pin_motor, no_speed);
 }
 
 void make_speed(uint16_t speed)
 {
-  ledcWrite(channel_motor, speed);
+  analogWrite(pin_motor, speed);
 }
 
 // LED ////////////////////////////////////////////////////////////
@@ -33,9 +31,7 @@ void make_speed(uint16_t speed)
 void LED::Init_led()
 {
     currBrightness = dark;
-    ledcAttachPin(pin, channel);
-    ledcSetup(channel, freq_lamps, resolution);
-    ledcWrite(channel, currBrightness);
+    analogWrite(pin, currBrightness);
     SetBrightness(currBrightness);
 }
 
@@ -53,13 +49,13 @@ void LED::Update()
   {
     // time to update
     currBrightness += setIncrement(currBrightness, destBrightness);
-    ledcWrite(channel, currBrightness);
+    analogWrite(pin, currBrightness);
   }
 }
 
 void LED::blitzLED(uint16_t delay_time)
 {
-    ledcWrite(channel, smallBright);
+    analogWrite(pin, smallBright);
     delay(delay_time);
-    ledcWrite(channel, dark);
+    analogWrite(pin, dark);
 }

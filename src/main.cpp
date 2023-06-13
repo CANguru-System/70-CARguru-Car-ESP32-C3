@@ -22,7 +22,6 @@
 #include <Ticker.h>
 #include <ArduinoOTA.h>
 #include "sound.h"
-#define test
 
 Car_Audio_Wav_Class Martinshorn_Wave; // Martinshorn theme
 Car_Audio_Wav_Class Hupe_Wave;        // Martinshorn theme
@@ -200,11 +199,9 @@ void onBlitzerTimer()
 {
   // blizzerTopLeft: Signallicht, oben links
   // blizzerfrontLeft: Signallicht, oben rechts
-  // blizzerFrontRight: Signallicht, vorne links
-  // blizzerTopRight: Signallicht, vorne rechts
   static uint8_t blitzerPhase = 0;
   // F r o n t b l i t z e r
-  LEDs[blizzerTopLeft + blitzerPhase].blitzLED(100);
+  LEDs[blizzerLeft + blitzerPhase].blitzLED(100);
   blitzerPhase++;
   if (blitzerPhase > 3)
     blitzerPhase = 0;
@@ -242,11 +239,13 @@ void onBrakeTimer()
 void setup()
 {
   Serial.begin(115200);
+  while (!Serial);
   // Brightness is 0-255. We set it to 1/3 brightness here
 //*  tinypico.DotStar_SetBrightness(smallBright);
 //*  tinypico.DotStar_SetPixelColor(0xf00000); // green
   // turn the LED off by making the voltage LOW
   LED_ON(); // red
+  log_e("XXXX");
   Serial.println("\r\n\r\nCARguru - CAR");
 
   // der Decoder strahlt mit seiner Kennung
@@ -340,6 +339,7 @@ void setup()
   {
     // Lampen-LEDs mit den PINs verbinden, initialisieren & Artikel auf dark setzen, dann einmal testen
     LEDs[swpr_channel] = LED(swpr_channel);
+    Serial.println(swpr_channel);
     LEDs[swpr_channel].blitzLED(200);
   }
   // Motor PWM initialisieren
@@ -500,10 +500,8 @@ void func_Rundumleuchten(uint8_t val)
   switch (val)
   {
   case 0:
-    LEDs[blizzerTopLeft].SetBrightness(dark);
-    LEDs[blizzerfrontLeft].SetBrightness(dark);
-    LEDs[blizzerFrontRight].SetBrightness(dark);
-    LEDs[blizzerTopRight].SetBrightness(dark);
+    LEDs[blizzerLeft].SetBrightness(dark);
+    LEDs[blizzerRight].SetBrightness(dark);
     blitzerTimer.detach();
     break;
   case 1:

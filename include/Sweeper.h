@@ -19,21 +19,19 @@ enum led_sweepers
   leftIndicator,     // lamp1: Blinker rechts
   rightIndicator,    // lamp2: Blinker links
   rearLight,         // lamp3: Rücklicht links
-  blizzerTopLeft,    // lamp4: Signallicht, oben links
-  blizzerfrontLeft,  // lamp5: Signallicht, oben rechts
-  blizzerFrontRight, // lamp6: Signallicht, vorne links
-  blizzerTopRight,   // lamp7: Signallicht, vorne rechts
+  blizzerLeft,       // lamp4: Signallicht, oben links
+  blizzerRight,      // lamp5: Signallicht, oben rechts
   LED_BUILTIN_OWN
 };
-const uint8_t num_led_sweepers = 8;
+const uint8_t num_led_sweepers = 6;
 
 const gpio_num_t channel2led_pins[num_led_sweepers] = {
-    GPIO_NUM_2, // lamp0
-    GPIO_NUM_3, // lamp1
-    GPIO_NUM_4, // lamp2
-    GPIO_NUM_5,  // lamp3
-    GPIO_NUM_6, // lamp4
-    GPIO_NUM_7 // lamp5
+    GPIO_NUM_3, // lamp0
+    GPIO_NUM_4, // lamp1
+    GPIO_NUM_5, // lamp2
+    GPIO_NUM_6, // lamp3
+    GPIO_NUM_7, // lamp4
+    GPIO_NUM_21  // lamp5
 };
 
 const uint8_t veryBright = 0xFF;
@@ -60,8 +58,7 @@ public:
   { };
   LED(led_sweepers nbr)
   {
-    channel = nbr;
-    pin = channel2led_pins[channel];
+    pin = channel2led_pins[nbr];
     Init_led();
   };
   // Setzt die Helligkeit
@@ -80,7 +77,6 @@ private:
   }
 
 private:
-  uint8_t channel;
   gpio_num_t pin;
   uint8_t currBrightness; // current servo position
   uint8_t destBrightness; // servo position, where to go
