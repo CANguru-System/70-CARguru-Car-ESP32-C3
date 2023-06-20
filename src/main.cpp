@@ -69,26 +69,23 @@ const uint16_t adr_decoderadr = lastAdr0 + 0x01;
 const uint16_t lastAdr = adr_decoderadr + 0x01;
 const uint16_t EEPROM_SIZE = lastAdr;
 
-// Timer
+// Timer - Bremse
 Ticker brkTimer;
 const float brktimerTime = 10.0;
+const uint16_t brakeTime = 100;
+uint16_t brakeTimer;
 
+// Timer - Blitzer
 Ticker blitzerTimer;
 const float blitzertimerTime = 200.0;
 
-// Lichthupe
+// Timer - Lichthupe
 Ticker lichthupeTimer;
 const float lichthupetimerTime = 9.0;
 const uint16_t LichthupeTime = 100;
 uint16_t LichtHupeTimer;
 
-uint8_t motorDirection = LOW;
-
-uint16_t old_speed = 0;
-uint16_t act_speed = 0;
-uint16_t max_speed = 255;
-
-// Blinker
+// Timer - Blinker
 Ticker blinkerTimer;
 const float blinkertimerTime = 500.0;
 bool BlinkerIsOn;
@@ -96,9 +93,12 @@ bool BlinkerIsHigh;
 bool leftBlinkerIsOn;
 bool rightBlinkerIsOn;
 
-// Bremse
-const uint16_t brakeTime = 100;
-uint16_t brakeTimer;
+uint8_t motorDirection = LOW;
+
+uint16_t old_speed = 0;
+uint16_t act_speed = 0;
+uint16_t max_speed = 255;
+
 
 // config-Daten
 // Parameter-Kanäle
@@ -131,12 +131,10 @@ IPAddress IP;
 
 void LED_ON()
 {
-//*  tinypico.DotStar_Show();
 }
 
 void LED_OFF()
 {
-//*  tinypico.DotStar_Clear();
 }
 
 //*********************************************************************************************************
@@ -203,7 +201,7 @@ void onBlitzerTimer()
   // F r o n t b l i t z e r
   LEDs[blizzerLeft + blitzerPhase].blitzLED(100);
   blitzerPhase++;
-  if (blitzerPhase > 3)
+  if (blitzerPhase > 1)
     blitzerPhase = 0;
 }
 
@@ -239,22 +237,19 @@ void onBrakeTimer()
 void setup()
 {
   Serial.begin(115200);
-  while (!Serial);
+  while (!Serial)
+  delay(500);
   // Brightness is 0-255. We set it to 1/3 brightness here
-//*  tinypico.DotStar_SetBrightness(smallBright);
-//*  tinypico.DotStar_SetPixelColor(0xf00000); // green
   // turn the LED off by making the voltage LOW
   LED_ON(); // red
-  log_e("XXXX");
-  Serial.println("\r\n\r\nCARguru - CAR");
+  log_e("\r\n\r\nCARguru - CAR");
 
   // der Decoder strahlt mit seiner Kennung
   // damit kennt die CARguru-Bridge (der Master) seine Decoder findet
 
   // startet WLAN im AP-Mode, damit meldet sich der Decoder beim Master
-  Serial.println();
-  Serial.println("WIFI Connect AP Mode");
-  Serial.println("--------------------");
+  log_e("\r\nWIFI Connect AP Mode\r\n");
+  log_e("--------------------");
 
   WiFi.mode(WIFI_OFF); // https://github.com/esp8266/Arduino/issues/3100
                        // Connect to Wi-Fi
@@ -278,7 +273,7 @@ void setup()
   // die EEPROM-Library wird gestartet
   if (!EEPROM.begin(EEPROM_SIZE))
   {
-    Serial.println("Failed to initialise EEPROM");
+    log_e("Failed to initialise EEPROM\r\n");
   }
   uint8_t setup_todo = EEPROM.read(adr_setup_done);
   if (setup_todo != setup_done)
@@ -339,13 +334,13 @@ void setup()
   {
     // Lampen-LEDs mit den PINs verbinden, initialisieren & Artikel auf dark setzen, dann einmal testen
     LEDs[swpr_channel] = LED(swpr_channel);
-    Serial.println(swpr_channel);
     LEDs[swpr_channel].blitzLED(200);
-  }
+}
   // Motor PWM initialisieren
   start_speed();
 
   // sound
+  Attach_Sound_Once();
   Martinshorn_Wave.Load_Wave("/Martinshorn.wav", false);
   Hupe_Wave.Load_Wave("/Hupe.wav", true);
 
@@ -797,8 +792,7 @@ void execute_funcs(uint8_t func)
   break;
 
   default:
-    Serial.print("Unbehandelte Function: ");
-    Serial.println(func, HEX);
+    log_e("Unbehandelte Function: %Xr\n", func);
     break;
   }
 }

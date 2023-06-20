@@ -25,13 +25,18 @@ enum led_sweepers
 };
 const uint8_t num_led_sweepers = 6;
 
-const gpio_num_t channel2led_pins[num_led_sweepers] = {
-    GPIO_NUM_3, // lamp0
-    GPIO_NUM_4, // lamp1
-    GPIO_NUM_5, // lamp2
-    GPIO_NUM_6, // lamp3
-    GPIO_NUM_7, // lamp4
-    GPIO_NUM_21  // lamp5
+struct pinType
+{
+	gpio_num_t pin;
+	bool isAnalogWrite;
+};
+const pinType channel2led_pins[num_led_sweepers] = {
+    { GPIO_NUM_3, true}, // lamp0
+    { GPIO_NUM_4, true}, // lamp1
+    { GPIO_NUM_5, true}, // lamp2
+    { GPIO_NUM_6, true}, // lamp3
+    { GPIO_NUM_7, false}, // lamp4
+    { GPIO_NUM_21, false}  // lamp5
 };
 
 const uint8_t veryBright = 0xFF;
@@ -39,7 +44,7 @@ const uint8_t bright = veryBright / 2;
 const uint8_t smallBright = bright / 2;
 const uint8_t dark = 0x00;
 
-const gpio_num_t pin_motor = GPIO_NUM_10; // motorspeed
+const gpio_num_t pin_motor = GPIO_NUM_20; // motorspeed
 const uint8_t channel_motor = LED_BUILTIN_OWN;  // 8 sind für die LEDs
 const uint16_t resolution = 0x08;
 const uint32_t freq_motor = 1000;
@@ -58,7 +63,8 @@ public:
   { };
   LED(led_sweepers nbr)
   {
-    pin = channel2led_pins[nbr];
+    pin = channel2led_pins[nbr].pin;
+    canAnalogWrite = channel2led_pins[nbr].isAnalogWrite;
     Init_led();
   };
   // Setzt die Helligkeit
@@ -80,4 +86,5 @@ private:
   gpio_num_t pin;
   uint8_t currBrightness; // current servo position
   uint8_t destBrightness; // servo position, where to go
+  bool canAnalogWrite;
 };

@@ -30,9 +30,12 @@ void make_speed(uint16_t speed)
 // einer LED verbunden
 void LED::Init_led()
 {
-    currBrightness = dark;
+  currBrightness = dark;
+  pinMode(pin, OUTPUT);
+  log_e("Init_led: %X", pin);
+  if (canAnalogWrite)
     analogWrite(pin, currBrightness);
-    SetBrightness(currBrightness);
+  SetBrightness(currBrightness);
 }
 
 // Setzt die Zielposition
@@ -49,13 +52,26 @@ void LED::Update()
   {
     // time to update
     currBrightness += setIncrement(currBrightness, destBrightness);
-    analogWrite(pin, currBrightness);
+    if (canAnalogWrite)
+      analogWrite(pin, currBrightness);
+    else
+      blitzLED(200);
   }
 }
 
 void LED::blitzLED(uint16_t delay_time)
 {
-    analogWrite(pin, smallBright);
+  log_e("blitzLED: %X", pin);
+  if (canAnalogWrite)
+  {
+    analogWrite(pin, veryBright);
     delay(delay_time);
     analogWrite(pin, dark);
+  }
+  else
+  {
+    digitalWrite(pin, HIGH);
+    delay(delay_time);
+    digitalWrite(pin, LOW);
+  }
 }
