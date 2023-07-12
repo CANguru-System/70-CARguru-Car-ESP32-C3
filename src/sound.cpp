@@ -1,25 +1,19 @@
 
 #include "Arduino.h"
-#include "SPI.h"
 #include "sound.h"
-#include <LittleFS.h>
+#include "LittleFS.h"
+#include "soc/rtc_io_reg.h"
 
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
-#include "esp_timer.h"
-#include "esp_log.h"
-#include "esp_sleep.h"
-#include "sdkconfig.h"
-
-const gpio_num_t MCP4921_CS_PIN = GPIO_NUM_20;
-
+const gpio_num_t DacPin = GPIO_NUM_25;
 const uint16_t sampleRate = 16000;
 const uint32_t clockPeriod = 4000000;
-const uint64_t timerRate = 62; // = 1/(80000000/2*sampleRate/clockPeriod)*1000000;
 
 uint8_t *WaveData = NULL;
-esp_timer_handle_t periodic_timer;
+
+// Interrupt timer for fixed sample rate playback (horn etc., playing in parallel with engine sound)
+hw_timer_t *fixedTimer = NULL;
+portMUX_TYPE fixedTimerMux = portMUX_INITIALIZER_UNLOCKED;
+volatile uint32_t fixedTimerTicks;
 
 // Interrupt timer for fixed sample rate playback (horn etc., playing in parallel with engine sound)
 
@@ -37,50 +31,37 @@ bool noSound;
 uint16_t lastValue;
 uint16_t currValue;
 
-void mcp4921(uint16_t data)
-{
-  data <<= 4;
-  digitalWrite(MCP4921_CS_PIN, LOW); // initiate data transfer with 4921
-  SPI.beginTransaction(SPISettings(16000000, MSBFIRST, SPI_MODE0));
-
-  SPI.transfer((0b00110000 & 0xf0) | ((data >> 8) & 0x0f)); // send 1st byte
-  SPI.transfer((uint8_t)(data & 0xff));                     // send 2nd byte
-
-  SPI.endTransaction();
-  digitalWrite(MCP4921_CS_PIN, HIGH); // finish data transfer
-}
-
-static void onSoundTimer(void *arg)
+void IRAM_ATTR onSoundTimer()
 {
   static volatile uint32_t DataIdx_curr = AUDIO_DATA_START;
   if (noSound)
     return;
-
   currValue = WaveData[DataIdx_curr]; // shift to 16 bit
   if (currValue != lastValue)
-    mcp4921(currValue);
+    SET_PERI_REG_BITS(RTC_IO_PAD_DAC1_REG, RTC_IO_PDAC1_DAC, currValue, RTC_IO_PDAC1_DAC_S);
   lastValue = currValue;
   DataIdx_curr++;
 
   if (DataIdx_curr >= m_buffSize_curr) // if that was the last data byte...
   {
+    DataIdx_curr = AUDIO_DATA_START;
     if (stop_wave_curr)
       curr_Wave->StopPlaying();
-    else
-      DataIdx_curr = AUDIO_DATA_START;
   }
-}
-
-void Attach_Sound_Once()
-{
-  pinMode(MCP4921_CS_PIN, OUTPUT);
-  digitalWrite(MCP4921_CS_PIN, HIGH);
-
-  SPI.begin();
 }
 
 Car_Audio_Wav_Class::Car_Audio_Wav_Class()
 {
+  if (fixedTimer == NULL)
+  {
+    fixedTimerTicks = clockPeriod / sampleRate;
+    noSound = true;
+    // Interrupt timer for sample rate
+    fixedTimer = timerBegin(0, 20, true);                  // timer 0, MWDT clock period = 12.5 ns * TIMGn_Tx_WDT_CLK_PRESCALE -> 12.5 ns * 20 -> 250 ns = 0.25 us, countUp
+    timerAttachInterrupt(fixedTimer, &onSoundTimer, false); // edge (not level) triggered
+    timerAlarmWrite(fixedTimer, fixedTimerTicks, true);    // autoreload true
+    timerAlarmEnable(fixedTimer);                          // enable
+  }
 }
 
 void Car_Audio_Wav_Class::Load_Wave(const char *path, bool play_once)
@@ -96,10 +77,10 @@ void Car_Audio_Wav_Class::Load_Wave(const char *path, bool play_once)
     audioName[0] = '/';
   }
   stop_wave = play_once;
-  log_e("Wave: %s", path);
+  log_i("Wave: %s", path);
   bool fsok = LittleFS.begin();
   if (fsok)
-    log_e("LittleFS init: ok");
+    log_i("LittleFS init: ok");
   else
     log_e("LittleFS init: fail!");
   if (LittleFS.exists(audioName))
@@ -120,51 +101,37 @@ void Car_Audio_Wav_Class::Load_Wave(const char *path, bool play_once)
     // just for clarification: size in the file
     m_buffSize = (WaveDataPtr[WAV_FILESIZE_H] * 65536) + (WaveDataPtr[WAV_FILESIZE_M] * 256) + WaveDataPtr[WAV_FILESIZE_L] + AUDIO_DATA_START;
     uint16_t rate = (WaveDataPtr[WAV_SAMPLERATE_H] * 256) + WaveDataPtr[WAV_SAMPLERATE_L];
-    log_e("Samplerate: %d Hz", rate);
+    log_i("Samplerate: %d Hz", rate);
 
     if (rdBytes != (m_buffSize + 1))
     {
       log_e("Failed to open file for reading");
     }
-    log_e("Reading: %s", audioName);
-    log_e("rdBytes: %d bytes", rdBytes);
-    log_e("m_buffSize: %d bytes", m_buffSize);
+    log_i("Reading: %s", audioName);
+    log_i("rdBytes: %d bytes", rdBytes);
+    log_i("m_buffSize: %d bytes", m_buffSize);
 
     audiofile.close();
-    log_e("Closing audio file");
+    log_i("Closing audio file");
   }
   LittleFS.end();
   vTaskDelay(2);
-  mcp4921(0x00);
+  dacWrite(DacPin, 0x00); // Set speaker to mid point to stop any clicks during sample playback
 }
 
 int Car_Audio_Wav_Class::PlayWav()
 {
   if (WaveDataPtr)
   {
+    log_i("Start PlayWav");
     vTaskDelay(2);
     m_buffSize_curr = m_buffSize;
     stop_wave_curr = stop_wave;
     curr_Wave = this;
     lastValue = 0x7F;
-    mcp4921(lastValue);
+    dacWrite(DacPin, lastValue); // Set speaker to mid point to stop any clicks during sample playback
     noSound = false;
     WaveData = WaveDataPtr;
-    /* Create a timer:
-     * a periodic timer which will run every 0.5s, and print a message timer with period of 1s.
-     */
-    const esp_timer_create_args_t periodic_timer_args = {
-        .callback = &onSoundTimer,
-        /* name is optional, but may help identify the timer when debugging */
-        .name = "onSoundTimer"};
-
-    ESP_ERROR_CHECK(esp_timer_create(&periodic_timer_args, &periodic_timer));
-    /* The timer has been created but is not running yet */
-    log_e("Created timer");
-
-    /* Start the timers */
-    ESP_ERROR_CHECK(esp_timer_start_periodic(periodic_timer, timerRate));
-    log_e("Started timer");
   }
 
   return 1;
@@ -173,11 +140,5 @@ int Car_Audio_Wav_Class::PlayWav()
 void Car_Audio_Wav_Class::StopPlaying()
 {
   noSound = true;
-  mcp4921(0x00); // lookuptable
-
-  /* Clean up and finish the example */
-  ESP_ERROR_CHECK(esp_timer_stop(periodic_timer));
-  log_e("Stopped timer");
-  ESP_ERROR_CHECK(esp_timer_delete(periodic_timer));
-  log_e("Deleted timer");
+  dacWrite(DacPin, 0x00); // Set speaker to mid point to stop any clicks during sample playback
 }

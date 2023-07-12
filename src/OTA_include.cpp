@@ -68,7 +68,7 @@ void Connect2WiFiandOTA()
   blink = blinkFast;
   if (!EEPROM.begin(EEPROM_SIZE))
   {
-    Serial.println("EEPROM-Fehler");
+    log_e("EEPROM-Fehler");
   }
 
   String ssid = EEPROM.readString(adr_ssid);
@@ -81,7 +81,7 @@ void Connect2WiFiandOTA()
   while (WiFi.status() != WL_CONNECTED)
   {
     delay(1000);
-    Serial.println("Connecting to WiFi..");
+    log_i("Connecting to WiFi..");
   }
 
   // Print ESP Local IP Address

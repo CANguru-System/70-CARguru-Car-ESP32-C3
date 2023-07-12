@@ -74,8 +74,6 @@ Here are the data Positions in the wav file specification.
 
 #define AUDIO_DATA_START 44 // this is where the data starts
 
-void Attach_Sound_Once();
-
 // The Main Wave class for sound samples
 class Car_Audio_Wav_Class
 {

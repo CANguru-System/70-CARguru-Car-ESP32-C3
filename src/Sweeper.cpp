@@ -32,9 +32,7 @@ void LED::Init_led()
 {
   currBrightness = dark;
   pinMode(pin, OUTPUT);
-  log_e("Init_led: %X", pin);
-  if (canAnalogWrite)
-    analogWrite(pin, currBrightness);
+  analogWrite(pin, currBrightness);
   SetBrightness(currBrightness);
 }
 
@@ -42,6 +40,12 @@ void LED::Init_led()
 void LED::SetBrightness(uint8_t brightness)
 {
   destBrightness = brightness;
+}
+
+// Setzt die Zielposition
+uint8_t LED::GetBrightness()
+{
+  return destBrightness;
 }
 
 // Überprüft periodisch, ob die Zielposition (Helligkeit) erreicht ist
@@ -52,26 +56,13 @@ void LED::Update()
   {
     // time to update
     currBrightness += setIncrement(currBrightness, destBrightness);
-    if (canAnalogWrite)
-      analogWrite(pin, currBrightness);
-    else
-      blitzLED(200);
+    analogWrite(pin, currBrightness);
   }
 }
 
 void LED::blitzLED(uint16_t delay_time)
 {
-  log_e("blitzLED: %X", pin);
-  if (canAnalogWrite)
-  {
-    analogWrite(pin, veryBright);
-    delay(delay_time);
-    analogWrite(pin, dark);
-  }
-  else
-  {
-    digitalWrite(pin, HIGH);
-    delay(delay_time);
-    digitalWrite(pin, LOW);
-  }
+  analogWrite(pin, veryBright);
+  delay(delay_time);
+  analogWrite(pin, dark);
 }

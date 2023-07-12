@@ -9,6 +9,7 @@
  */
 
 #include "Arduino.h"
+#include <TinyPICO.h>
 #include "Sweeper.h"
 #include <WiFi.h>
 #include <ESPmDNS.h>
@@ -26,10 +27,12 @@
 Car_Audio_Wav_Class Martinshorn_Wave; // Martinshorn theme
 Car_Audio_Wav_Class Hupe_Wave;        // Martinshorn theme
                                       // Use GPIO 25, one of the 2 DAC pins and timer 0
+
+TinyPICO tinypico = TinyPICO();
+
 /*
 Variablen der LEDs
 */
-
 LED LEDs[num_led_sweepers];
 
 enum functions
@@ -59,7 +62,7 @@ void execute_funcs(uint8_t func);
 
 bool headlightsOn = false;
 bool brakelightsOn = false;
-const unsigned long updateInterval = 1000; // interval between updates
+const unsigned long updateInterval = 3; // interval between updates
 unsigned long lastUpdate;                  // last update of LEDs
 
 // EEPROM-Adressen
@@ -69,29 +72,18 @@ const uint16_t adr_decoderadr = lastAdr0 + 0x01;
 const uint16_t lastAdr = adr_decoderadr + 0x01;
 const uint16_t EEPROM_SIZE = lastAdr;
 
-// Timer - Bremse
+// Timer
 Ticker brkTimer;
-const float brktimerTime = 10.0;
-const uint16_t brakeTime = 100;
-uint16_t brakeTimer;
+const uint32_t brktimerTime = 10;
 
-// Timer - Blitzer
 Ticker blitzerTimer;
-const float blitzertimerTime = 200.0;
+const uint32_t blitzertimerTime = 200;
 
-// Timer - Lichthupe
+// Lichthupe
 Ticker lichthupeTimer;
-const float lichthupetimerTime = 9.0;
+const uint32_t lichthupetimerTime = 9;
 const uint16_t LichthupeTime = 100;
 uint16_t LichtHupeTimer;
-
-// Timer - Blinker
-Ticker blinkerTimer;
-const float blinkertimerTime = 500.0;
-bool BlinkerIsOn;
-bool BlinkerIsHigh;
-bool leftBlinkerIsOn;
-bool rightBlinkerIsOn;
 
 uint8_t motorDirection = LOW;
 
@@ -99,6 +91,25 @@ uint16_t old_speed = 0;
 uint16_t act_speed = 0;
 uint16_t max_speed = 255;
 
+// Blinker
+Ticker blinkerTimer;
+const uint32_t blinkertimerTime = updateInterval*veryBright;
+
+enum _blinkerStatus
+{
+  BlinkerGetsHigh,     // 
+  BlinkerGetsLow,    // "F01" Blinker links
+  BlinkerRemains
+};
+
+bool BlinkerIsOn;
+_blinkerStatus blinkerStatus;
+bool leftBlinkerIsOn;
+bool rightBlinkerIsOn;
+
+// Bremse
+const uint16_t brakeTime = 100;
+uint16_t brakeTimer;
 
 // config-Daten
 // Parameter-Kanäle
@@ -131,10 +142,12 @@ IPAddress IP;
 
 void LED_ON()
 {
+  tinypico.DotStar_Show();
 }
 
 void LED_OFF()
 {
+  tinypico.DotStar_Clear();
 }
 
 //*********************************************************************************************************
@@ -166,21 +179,10 @@ void onBlinkerTimer()
   // Blinker links
   if (BlinkerIsOn == true)
   {
-    if (BlinkerIsHigh)
+    switch (blinkerStatus)
     {
-      BlinkerIsHigh = false;
-      if (leftBlinkerIsOn == true)
-      {
-        LEDs[rightIndicator].SetBrightness(dark);
-      }
-      if (rightBlinkerIsOn == true)
-      {
-        LEDs[leftIndicator].SetBrightness(dark);
-      }
-    }
-    else
-    {
-      BlinkerIsHigh = true;
+    case BlinkerGetsHigh:
+      // schaltet Blinkerlampen ein
       if (leftBlinkerIsOn == true)
       {
         LEDs[rightIndicator].SetBrightness(veryBright);
@@ -189,6 +191,23 @@ void onBlinkerTimer()
       {
         LEDs[leftIndicator].SetBrightness(veryBright);
       }
+      blinkerStatus = BlinkerGetsLow;
+      break;
+    case BlinkerGetsLow:
+      // schaltet Blinkerlampen aus
+      if (leftBlinkerIsOn == true)
+      {
+        LEDs[rightIndicator].SetBrightness(dark);
+      }
+      if (rightBlinkerIsOn == true)
+      {
+        LEDs[leftIndicator].SetBrightness(dark);
+      }
+      blinkerStatus = BlinkerRemains;
+      break;
+    case BlinkerRemains:
+      blinkerStatus = BlinkerGetsHigh;
+      break;
     }
   }
 }
@@ -197,11 +216,13 @@ void onBlitzerTimer()
 {
   // blizzerTopLeft: Signallicht, oben links
   // blizzerfrontLeft: Signallicht, oben rechts
+  // blizzerFrontRight: Signallicht, vorne links
+  // blizzerTopRight: Signallicht, vorne rechts
   static uint8_t blitzerPhase = 0;
   // F r o n t b l i t z e r
-  LEDs[blizzerLeft + blitzerPhase].blitzLED(100);
+  LEDs[blizzerTopLeft + blitzerPhase].blitzLED(100);
   blitzerPhase++;
-  if (blitzerPhase > 1)
+  if (blitzerPhase > 3)
     blitzerPhase = 0;
 }
 
@@ -237,23 +258,44 @@ void onBrakeTimer()
 void setup()
 {
   Serial.begin(115200);
-  while (!Serial)
   delay(500);
-  // Brightness is 0-255. We set it to 1/3 brightness here
-  // turn the LED off by making the voltage LOW
+  //  while (!Serial)
+  //  { }
+ if (psramInit())
+  {
+    log_i("PSRAM is correctly initialized");
+    int available_PSRAM_size_after = ESP.getFreePsram();
+    log_i("PSRAM Size available (bytes): %d", available_PSRAM_size_after); // Free memory space has decreased
+  }
+  else
+  {
+    log_i("PSRAM not available.  HALTING");
+    while (1)
+      ;
+  }  
+  tinypico.DotStar_SetBrightness(smallBright);
+  tinypico.DotStar_SetPixelColor(0xf00000); // green
+  delay(500);
   LED_ON(); // red
-  log_e("\r\n\r\nCARguru - CAR");
+  log_i("\r\n\r\nCARguru - CAR\r\n");
+  log_i("\n on %s", ARDUINO_BOARD);
+  log_i("CPU Frequency = %d Mhz", F_CPU / 1000000);
+  //  log_e("ERROR!");
+  //  log_v("VERBOSE");
+  //  log_w("WARNING");
+  //  log_i("INFO");
 
   // der Decoder strahlt mit seiner Kennung
   // damit kennt die CARguru-Bridge (der Master) seine Decoder findet
 
   // startet WLAN im AP-Mode, damit meldet sich der Decoder beim Master
-  log_e("\r\nWIFI Connect AP Mode\r\n");
-  log_e("--------------------");
+  log_i("\r\nWIFI Connect AP Mode\r\n");
+
+  Serial.setDebugOutput(false);
 
   WiFi.mode(WIFI_OFF); // https://github.com/esp8266/Arduino/issues/3100
                        // Connect to Wi-Fi
-  WiFi.mode(WIFI_AP);
+  WiFi.mode(WIFI_MODE_AP);
   String ssid0 = "CRgrSLV";
   String ssid1 = WiFi.softAPmacAddress();
   ssid0 = ssid0 + ssid1;
@@ -261,6 +303,7 @@ void setup()
   ssid0.toCharArray(ssid, 30);
   WiFi.softAP(ssid);
   WiFi.setTxPower(WIFI_POWER_MINUS_1dBm); // Set power to lowest possible value WIFI_POWER_MINUS_1dBm  WIFI_POWER_19_5dBm
+  Serial.setDebugOutput(true);
   //
   // der Master (CARguru-Bridge) wird registriert
   addMaster();
@@ -273,7 +316,7 @@ void setup()
   // die EEPROM-Library wird gestartet
   if (!EEPROM.begin(EEPROM_SIZE))
   {
-    log_e("Failed to initialise EEPROM\r\n");
+    Serial.println("Failed to initialise EEPROM\r\n");
   }
   uint8_t setup_todo = EEPROM.read(adr_setup_done);
   if (setup_todo != setup_done)
@@ -325,7 +368,7 @@ void setup()
 
   LichtHupeTimer = 0;
   brakeTimer = 0;
-  BlinkerIsHigh = false;
+  blinkerStatus = BlinkerGetsHigh;
 
   old_speed = 0;
   act_speed = 0;
@@ -335,12 +378,11 @@ void setup()
     // Lampen-LEDs mit den PINs verbinden, initialisieren & Artikel auf dark setzen, dann einmal testen
     LEDs[swpr_channel] = LED(swpr_channel);
     LEDs[swpr_channel].blitzLED(200);
-}
+  }
   // Motor PWM initialisieren
   start_speed();
 
   // sound
-  Attach_Sound_Once();
   Martinshorn_Wave.Load_Wave("/Martinshorn.wav", false);
   Hupe_Wave.Load_Wave("/Hupe.wav", true);
 
@@ -396,7 +438,7 @@ void func_Blinker_links(uint8_t val)
     BlinkerIsOn = true;
     leftBlinkerIsOn = true;
     rightBlinkerIsOn = false;
-    BlinkerIsHigh = true;
+    blinkerStatus = BlinkerGetsHigh;
     LEDs[rightIndicator].SetBrightness(veryBright);
     blinkerTimer.attach_ms(blinkertimerTime, onBlinkerTimer);
     break;
@@ -419,12 +461,13 @@ void func_Blinker_rechts(uint8_t val)
     BlinkerIsOn = true;
     rightBlinkerIsOn = true;
     leftBlinkerIsOn = false;
-    BlinkerIsHigh = true;
+    blinkerStatus = BlinkerGetsHigh;
     LEDs[leftIndicator].SetBrightness(veryBright);
     blinkerTimer.attach_ms(blinkertimerTime, onBlinkerTimer);
     break;
   }
 }
+
 
 void func_Warnblinker(uint8_t val)
 {
@@ -442,10 +485,10 @@ void func_Warnblinker(uint8_t val)
     blinkerTimer.detach();
     break;
   case 1:
+    BlinkerIsOn = true;
     leftBlinkerIsOn = true;
     rightBlinkerIsOn = true;
-    BlinkerIsOn = true;
-    BlinkerIsHigh = true;
+    blinkerStatus = BlinkerGetsHigh;
     LEDs[rightIndicator].SetBrightness(veryBright);
     LEDs[leftIndicator].SetBrightness(veryBright);
     blinkerTimer.attach_ms(blinkertimerTime, onBlinkerTimer);
@@ -453,6 +496,22 @@ void func_Warnblinker(uint8_t val)
   }
 }
 
+/*// Für Testzwecke
+void func_Fernlicht(uint8_t val)
+{
+  for (led_sweepers swpr_channel = frontLight; swpr_channel < LED_BUILTIN_OWN; swpr_channel = led_sweepers(swpr_channel + 1))
+  {
+    // Funktion schaltet alle Lichter ein
+    LEDs[swpr_channel].SetBrightness(dark);
+  }
+  LEDs[frontLight].SetBrightness(tinyBright);
+  LEDs[rightIndicator].SetBrightness(tinyBright);
+  LEDs[leftIndicator].SetBrightness(tinyBright);
+  LEDs[blizzerTopLeft].SetBrightness(tinyBright);
+  LEDs[blizzerFrontRight].SetBrightness(tinyBright);
+}*/
+
+//*
 void func_Fernlicht(uint8_t val)
 {
   // "F04" Lichthupe
@@ -475,7 +534,7 @@ void func_Fernlicht(uint8_t val)
     LEDs[frontLight].SetBrightness(veryBright);
     break;
   }
-}
+}//*/
 
 void func_Lichthupe_TASTER(uint8_t val)
 {
@@ -495,8 +554,10 @@ void func_Rundumleuchten(uint8_t val)
   switch (val)
   {
   case 0:
-    LEDs[blizzerLeft].SetBrightness(dark);
-    LEDs[blizzerRight].SetBrightness(dark);
+    LEDs[blizzerTopLeft].SetBrightness(dark);
+    LEDs[blizzerfrontLeft].SetBrightness(dark);
+    LEDs[blizzerFrontRight].SetBrightness(dark);
+    LEDs[blizzerTopRight].SetBrightness(dark);
     blitzerTimer.detach();
     break;
   case 1:
@@ -759,7 +820,8 @@ void execute_funcs(uint8_t func)
         func_Lichthupe_TASTER(val);
         break;
       case Hupe_TASTER: // "F06" Hupe
-        Hupe_Wave.PlayWav();
+        if (val == 0x01)
+          Hupe_Wave.PlayWav();
         break;
       case Martinshorn: // "F7" Martinshorn
         // "F07" Martinshorn
@@ -777,7 +839,7 @@ void execute_funcs(uint8_t func)
         func_Rundumleuchten(val);
         break;
       case battery_func:
-//*        voltage = tinypico.GetBatteryVoltage();    // 3.14
+        voltage = tinypico.GetBatteryVoltage();    // 3.14
         opFrame[data5] = voltage;                  // 3
         voltage = (voltage - opFrame[data5]) * 10; // 1.4
         opFrame[data6] = voltage;                  // 1
@@ -792,7 +854,7 @@ void execute_funcs(uint8_t func)
   break;
 
   default:
-    log_e("Unbehandelte Function: %Xr\n", func);
+    //    Serial.println("Unbehandelte Function: %Xr\n", func);
     break;
   }
 }
@@ -816,11 +878,11 @@ void loop()
     // actual speed set is done; report to the bridge
     sendCanFrame();
   }
-  if ((micros() - lastUpdate) > updateInterval)
+  if ((millis() - lastUpdate) > updateInterval)
   { // time to update
     for (led_sweepers l = frontLight; l < LED_BUILTIN_OWN; l = led_sweepers(l + 1))
       LEDs[l].Update();
-    lastUpdate = micros();
+    lastUpdate = millis();
   }
   if (got1CANmsg)
   {

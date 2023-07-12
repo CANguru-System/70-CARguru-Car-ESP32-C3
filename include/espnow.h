@@ -75,31 +75,31 @@ void printESPNowError(esp_err_t Result)
   if (Result == ESP_ERR_ESPNOW_NOT_INIT)
   {
     // How did we get so far!!
-    Serial.println("ESPNOW not Init.");
+    log_e("ESPNOW not Init.");
   }
   else if (Result == ESP_ERR_ESPNOW_ARG)
   {
-    Serial.println("Invalid Argument");
+    log_e("Invalid Argument");
   }
   else if (Result == ESP_ERR_ESPNOW_INTERNAL)
   {
-    Serial.println("Internal Error");
+    log_e("Internal Error");
   }
   else if (Result == ESP_ERR_ESPNOW_NO_MEM)
   {
-    Serial.println("ESP_ERR_ESPNOW_NO_MEM");
+    log_e("ESP_ERR_ESPNOW_NO_MEM");
   }
   else if (Result == ESP_ERR_ESPNOW_NOT_FOUND)
   {
-    Serial.println("Peer not found.");
+    log_e("Peer not found.");
   }
   else if (Result == ESP_ERR_ESPNOW_IF)
   {
-    Serial.println("Interface Error.");
+    log_e("Interface Error.");
   }
   else
   {
-    Serial.printf("\r\nNot sure what happened\t%d", Result);
+    log_e("\r\nNot sure what happened\t%d", Result);
   }
 }
 
@@ -121,7 +121,7 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len)
     return;
   }
   got1CANmsg = false;
-//  Serial.println(opFrame[0x01], HEX);
+  //  log_e(opFrame[0x01], HEX);
   switch (opFrame[0x01])
   {
     // wird hier bearbeitet
@@ -139,8 +139,8 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len)
   // bewirkt das Aufblitzen der LED
   // wird hier bearbeitet
   case BlinkAlive:
-//    if (secs < 10)
-//      secs = 10;
+    //    if (secs < 10)
+    //      secs = 10;
     break;
     // wird hier bearbeitet
   case PING:
@@ -148,7 +148,7 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len)
     sendPING();
     break;
   // config
-    // wird in loop bearbeitet
+  // wird in loop bearbeitet
   case CONFIG_Status:
   {
     CONFIG_Status_Request = true;
@@ -157,7 +157,7 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len)
   }
   break;
   // IP-Adresse rückmelden
-    // wird hier bearbeitet
+  // wird hier bearbeitet
   case SEND_IP:
     // die eigene IP-Adresse wird über die Bridge an den Server zurück geliefert
     sendIP();
@@ -168,13 +168,13 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len)
     switch (opFrame[data4])
     {
     case SYS_STAT:
-    // wird in loop bearbeitet
+      // wird in loop bearbeitet
       SYS_CMD_Request = true;
       // alles Weitere wird in loop erledigt
       got1CANmsg = true;
       break;
     case START_OTA:
-    // wird hier bearbeitet
+      // wird hier bearbeitet
       // Modul wird neu gestartet und wartet anschließend auf neue Software (OTA)
       EEPROM.write(adr_ota, startWithOTA);
       EEPROM.commit();
@@ -197,7 +197,10 @@ void sendTheData()
 // Auswertung nach dem Sendevorgang
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
 {
-  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "OK" : "Fail");
+  if (status == ESP_NOW_SEND_SUCCESS)
+    log_i("OK");
+  else
+    log_e("Fail");
 }
 
 // der Master (CARguru-Bridge) wird registriert
@@ -205,11 +208,11 @@ void addMaster()
 {
   if (esp_now_init() == ESP_OK)
   {
-    Serial.println("ESPNow Init Success!");
+    log_i("ESPNow Init Success!");
   }
   else
   {
-    Serial.println("ESPNow Init Failed....");
+    log_e("ESPNow Init Failed....");
   }
   esp_now_register_recv_cb(OnDataRecv);
   esp_now_register_send_cb(OnDataSent);
@@ -221,7 +224,7 @@ void addMaster()
   // Add the remote master node to this slave node
   if (esp_now_add_peer(masterNode) == ESP_OK)
   {
-    Serial.println("CARguru-Bridge found!");
+    log_i("CARguru-Bridge found!");
   }
 }
 
