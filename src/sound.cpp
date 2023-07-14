@@ -58,7 +58,7 @@ Car_Audio_Wav_Class::Car_Audio_Wav_Class()
     noSound = true;
     // Interrupt timer for sample rate
     fixedTimer = timerBegin(0, 20, true);                  // timer 0, MWDT clock period = 12.5 ns * TIMGn_Tx_WDT_CLK_PRESCALE -> 12.5 ns * 20 -> 250 ns = 0.25 us, countUp
-    timerAttachInterrupt(fixedTimer, &onSoundTimer, false); // edge (not level) triggered
+    timerAttachInterrupt(fixedTimer, &onSoundTimer, true); // edge (not level) triggered
     timerAlarmWrite(fixedTimer, fixedTimerTicks, true);    // autoreload true
     timerAlarmEnable(fixedTimer);                          // enable
   }

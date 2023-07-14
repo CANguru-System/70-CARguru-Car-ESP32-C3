@@ -261,18 +261,6 @@ void setup()
   delay(500);
   //  while (!Serial)
   //  { }
- if (psramInit())
-  {
-    log_i("PSRAM is correctly initialized");
-    int available_PSRAM_size_after = ESP.getFreePsram();
-    log_i("PSRAM Size available (bytes): %d", available_PSRAM_size_after); // Free memory space has decreased
-  }
-  else
-  {
-    log_i("PSRAM not available.  HALTING");
-    while (1)
-      ;
-  }  
   tinypico.DotStar_SetBrightness(smallBright);
   tinypico.DotStar_SetPixelColor(0xf00000); // green
   delay(500);
